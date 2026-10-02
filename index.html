@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Play Dots and Boxes online with intelligent AI and 2-player pass-and-play. Modern glowing neon aesthetics, sound effects, chain tactics, and multiple board sizes.">
+  <title>Dots &amp; Boxes - Tactical Neon Strategy Game</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background glow layers -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <canvas id="particles-canvas"></canvas>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="logo-area">
+        <div class="logo-icon">
+          <span class="dot-icon dot-p1"></span>
+          <span class="line-icon"></span>
+          <span class="dot-icon dot-p2"></span>
+        </div>
+        <div class="logo-text">
+          <h1>DOTS <span class="accent-amp">&amp;</span> BOXES</h1>
+          <p class="tagline">Tactical Territory Capture</p>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <button id="btn-sound" class="icon-btn" title="Toggle Sound (M)" aria-label="Toggle Sound">
+          <svg class="icon sound-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+          </svg>
+          <svg class="icon sound-off hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+          </svg>
+        </button>
+
+        <button id="btn-rules" class="icon-btn" title="How to Play (?)" aria-label="Game Rules">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </button>
+
+        <button id="btn-stats" class="icon-btn" title="Statistics" aria-label="Player Statistics">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="20" x2="18" y2="10"></line>
+            <line x1="12" y1="20" x2="12" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="14"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Top Scoreboard Bar -->
+    <section class="scoreboard-section">
+      <!-- Player 1 Card -->
+      <div class="player-card player-1 active-card" id="card-p1">
+        <div class="avatar-ring">
+          <div class="player-avatar" id="avatar-p1">P1</div>
+          <div class="pulse-indicator"></div>
+        </div>
+        <div class="player-info">
+          <div class="player-name-row">
+            <span class="player-name" id="name-p1">Player 1</span>
+            <span class="player-badge p1-badge">YOU</span>
+          </div>
+          <div class="player-score-wrap">
+            <span class="score-digit" id="score-p1">0</span>
+            <span class="score-label">boxes</span>
+          </div>
+        </div>
+        <div class="claimed-indicator-bar" id="bar-p1" style="width: 0%"></div>
+      </div>
+
+      <!-- Turn & Game Status Indicator -->
+      <div class="turn-status-card" id="turn-card">
+        <div class="turn-badge" id="turn-badge">
+          <span class="status-dot"></span>
+          <span class="turn-text" id="turn-text">Your Turn</span>
+        </div>
+        <div class="combo-banner hidden" id="combo-banner">
+          <span class="combo-icon">⚡</span>
+          <span class="combo-count" id="combo-count">Combo x2!</span>
+        </div>
+      </div>
+
+      <!-- Player 2 / AI Card -->
+      <div class="player-card player-2" id="card-p2">
+        <div class="claimed-indicator-bar" id="bar-p2" style="width: 0%"></div>
+        <div class="player-info right-align">
+          <div class="player-name-row justify-end">
+            <span class="player-badge p2-badge" id="badge-p2">BOT</span>
+            <span class="player-name" id="name-p2">AI Bot</span>
+          </div>
+          <div class="player-score-wrap">
+            <span class="score-digit" id="score-p2">0</span>
+            <span class="score-label">boxes</span>
+          </div>
+        </div>
+        <div class="avatar-ring">
+          <div class="player-avatar" id="avatar-p2">AI</div>
+          <div class="pulse-indicator"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Controls Bar -->
+    <section class="controls-bar">
+      <div class="control-group">
+        <label for="select-mode">Game Mode</label>
+        <div class="custom-select-wrap">
+          <select id="select-mode">
+            <option value="pve" selected>Player vs AI</option>
+            <option value="pvp">2 Players (Pass &amp; Play)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="control-group" id="difficulty-group">
+        <label for="select-diff">AI Intelligence</label>
+        <div class="custom-select-wrap">
+          <select id="select-diff">
+            <option value="easy">Casual (Easy)</option>
+            <option value="medium" selected>Tactician (Medium)</option>
+            <option value="hard">Grandmaster (Hard)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="control-group">
+        <label for="select-grid">Grid Size</label>
+        <div class="custom-select-wrap">
+          <select id="select-grid">
+            <option value="3">3×3 Dots (4 Boxes)</option>
+            <option value="4" selected>4×4 Dots (9 Boxes)</option>
+            <option value="5">5×5 Dots (16 Boxes)</option>
+            <option value="6">6×6 Dots (25 Boxes)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button id="btn-undo" class="action-btn secondary-btn" title="Undo Move (Z)" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7v6h6"></path>
+            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+          </svg>
+          <span>Undo</span>
+        </button>
+
+        <button id="btn-restart" class="action-btn primary-btn" title="Restart Game (R)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+          </svg>
+          <span>Restart</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Main Game Board Stage -->
+    <main class="board-stage">
+      <div class="board-frame" id="board-frame">
+        <svg id="game-svg" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <filter id="glow-p1" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <filter id="glow-p2" x="-40%" y="-40%" width="180%" height="180%">
+              <feGaussianBlur stdDeviation="5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <linearGradient id="grad-line-p1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#00f2fe" />
+              <stop offset="100%" stop-color="#4facfe" />
+            </linearGradient>
+            <linearGradient id="grad-line-p2" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ff2a6d" />
+              <stop offset="100%" stop-color="#ff758c" />
+            </linearGradient>
+            <radialGradient id="grad-p1-box" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#00f2fe" stop-opacity="0.45" />
+              <stop offset="100%" stop-color="#4facfe" stop-opacity="0.18" />
+            </radialGradient>
+            <radialGradient id="grad-p2-box" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="#ff2a6d" stop-opacity="0.45" />
+              <stop offset="100%" stop-color="#ff758c" stop-opacity="0.18" />
+            </radialGradient>
+          </defs>
+
+          <!-- SVG Visual Layers in Order -->
+          <g id="grid-background-layer"></g>
+          <g id="boxes-layer"></g>
+          <g id="lines-layer"></g>
+          <g id="dots-layer"></g>
+          <g id="hover-preview-layer"></g>
+          <g id="hit-areas-layer"></g>
+        </svg>
+
+        <!-- Dynamic Floater Overlays (Combos, +1 animations) -->
+        <div id="floaters-container"></div>
+      </div>
+
+      <div class="board-footer-info">
+        <div class="remaining-boxes-badge">
+          <span class="boxes-count-icon">▫</span>
+          <span id="remaining-count-text">9 boxes unclaimed</span>
+        </div>
+        <div class="game-hint" id="game-hint">
+          Click between any two dots to connect them. Complete all 4 sides to capture the box!
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Victory / Game Over Modal -->
+  <div class="modal-backdrop hidden" id="modal-gameover" role="dialog" aria-modal="true">
+    <div class="modal-card victory-card">
+      <div class="victory-glow"></div>
+      <div class="victory-header">
+        <div class="trophy-badge" id="modal-trophy">🏆</div>
+        <h2 id="modal-winner-title">Victory!</h2>
+        <p class="modal-subtitle" id="modal-winner-subtitle">Player 1 wins the match!</p>
+      </div>
+
+      <div class="modal-scores-summary">
+        <div class="modal-score-box p1-summary">
+          <span class="summary-name" id="summary-name-p1">Player 1</span>
+          <span class="summary-score" id="summary-score-p1">0</span>
+          <span class="summary-badge" id="summary-badge-p1">Winner</span>
+        </div>
+        <div class="modal-vs-divider">VS</div>
+        <div class="modal-score-box p2-summary">
+          <span class="summary-name" id="summary-name-p2">AI Bot</span>
+          <span class="summary-score" id="summary-score-p2">0</span>
+          <span class="summary-badge" id="summary-badge-p2">Defeated</span>
+        </div>
+      </div>
+
+      <div class="modal-stats-pills">
+        <div class="stat-pill">
+          <span class="pill-label">Total Moves</span>
+          <span class="pill-value" id="summary-total-moves">0</span>
+        </div>
+        <div class="stat-pill">
+          <span class="pill-label">Max Combo</span>
+          <span class="pill-value" id="summary-max-combo">0x</span>
+        </div>
+        <div class="stat-pill">
+          <span class="pill-label">Duration</span>
+          <span class="pill-value" id="summary-time">00:00</span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button id="btn-modal-rematch" class="primary-btn pulse-glow">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+          </svg>
+          Play Again
+        </button>
+        <button id="btn-modal-close" class="secondary-btn">Review Board</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rules / How-To-Play Modal -->
+  <div class="modal-backdrop hidden" id="modal-rules" role="dialog" aria-modal="true">
+    <div class="modal-card info-card">
+      <div class="modal-title-row">
+        <h3>How to Play Dots &amp; Boxes</h3>
+        <button class="modal-close-btn" id="btn-close-rules" aria-label="Close Rules">✕</button>
+      </div>
+      <div class="rules-content">
+        <div class="rule-item">
+          <div class="rule-icon">1</div>
+          <div class="rule-text">
+            <strong>Draw Lines:</strong> Players alternate clicking between any two adjacent dots to draw a horizontal or vertical line.
+          </div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-icon">2</div>
+          <div class="rule-text">
+            <strong>Claim Boxes:</strong> Completing the 4th side of a 1×1 square captures the box, awarding you <strong>+1 point</strong> in your color.
+          </div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-icon">3</div>
+          <div class="rule-text">
+            <strong>Bonus Turns (Combos):</strong> Capturing a box gives you an <em>immediate extra turn</em>! Chain multiple box captures together for combo streaks.
+          </div>
+        </div>
+        <div class="rule-item">
+          <div class="rule-icon">4</div>
+          <div class="rule-text">
+            <strong>Tactical Double-Cross:</strong> In high-level play, intentionally handing 2 boxes in a chain to your opponent can force them to open an even larger corridor for you!
+          </div>
+        </div>
+      </div>
+      <button class="primary-btn full-width" id="btn-rules-got-it">Got it, Let's Play!</button>
+    </div>
+  </div>
+
+  <!-- Lifetime Statistics Modal -->
+  <div class="modal-backdrop hidden" id="modal-stats-view" role="dialog" aria-modal="true">
+    <div class="modal-card info-card">
+      <div class="modal-title-row">
+        <h3>Player Statistics</h3>
+        <button class="modal-close-btn" id="btn-close-stats" aria-label="Close Stats">✕</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-number" id="stats-games-played">0</div>
+          <div class="stat-label">Games Played</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number stat-highlight" id="stats-win-rate">0%</div>
+          <div class="stat-label">Win Rate vs AI</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stats-boxes-captured">0</div>
+          <div class="stat-label">Boxes Captured</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stats-best-combo">0</div>
+          <div class="stat-label">Highest Combo</div>
+        </div>
+      </div>
+      <div class="modal-actions mt-4">
+        <button class="secondary-btn text-danger" id="btn-reset-stats">Reset Stats</button>
+        <button class="primary-btn" id="btn-stats-ok">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="audio.js"></script>
+  <script src="ai.js"></script>
+  <script src="game.js"></script>
+  <script src="ui.js"></script>
+</body>
+</html>
