@@ -1,0 +1,698 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quadrant — Architectural Dots &amp; Boxes</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=JetBrains+Mono:wght@500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --font-display: 'Fraunces', Georgia, serif;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background-color: #F4F2EC;
+      color: #18181B;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    .font-display {
+      font-family: var(--font-display);
+    }
+    .font-mono-tabular {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+    .drafting-surface {
+      background-color: #F6F4EE;
+      background-image:
+        linear-gradient(to right, rgba(24, 24, 27, 0.035) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(24, 24, 27, 0.035) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+  </style>
+</head>
+<body data-state="title" class="drafting-surface min-h-screen select-none">
+  <div id="app"></div>
+
+  <script>
+    // =========================================================================
+    // 1. PROCEDURAL WEB AUDIO ENGINE
+    // =========================================================================
+    class SoundEngine {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+      }
+      ensureContext() {
+        if (this.muted) return null;
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if (AudioCtx) this.ctx = new AudioCtx();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume().catch(() => {});
+        }
+        return this.ctx;
+      }
+      playEdgeClaim(isPlayerOne) {
+        const ctx = this.ensureContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const baseFreq = (isPlayerOne ? 420 : 350) * (0.96 + Math.random() * 0.08);
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.35, now + 0.065);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(0.11, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.075);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      }
+      playBoxCapture(streak) {
+        const ctx = this.ensureContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const scale = [523.25, 587.33, 659.25, 783.99, 880.0, 1046.5];
+        const rootFreq = scale[Math.min(Math.max(0, streak - 1), scale.length - 1)];
+        [1, 1.25].forEach((mult, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(rootFreq * mult, now + idx * 0.035);
+          gain.gain.setValueAtTime(0.001, now + idx * 0.035);
+          gain.gain.linearRampToValueAtTime(0.12, now + idx * 0.035 + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.035 + 0.22);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.035);
+          osc.stop(now + idx * 0.035 + 0.24);
+        });
+      }
+      playUiTick() {
+        const ctx = this.ensureContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(680, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.035);
+        gain.gain.setValueAtTime(0.06, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.045);
+      }
+      playMatchEnd(victory) {
+        const ctx = this.ensureContext();
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        const notes = victory ? [523.25, 659.25, 783.99, 1046.5] : [440, 392, 349.23, 329.63];
+        notes.forEach((freq, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const t = now + i * 0.09;
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.001, t);
+          gain.gain.linearRampToValueAtTime(0.11, t + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(t);
+          osc.stop(t + 0.36);
+        });
+      }
+    }
+    const soundEngine = new SoundEngine();
+
+    // =========================================================================
+    // 2. PURE GAME RULES & AI ARCHITECT ENGINE
+    // =========================================================================
+    function makeEdgeId(orientation, row, col) {
+      return `${orientation}-${row}-${col}`;
+    }
+    function parseEdgeId(edgeId) {
+      const [orientation, r, c] = edgeId.split('-');
+      return { orientation, row: Number(r), col: Number(c) };
+    }
+    function getAllEdgeIds(gridSize) {
+      const list = [];
+      for (let r = 0; r <= gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) list.push(makeEdgeId('h', r, c));
+      }
+      for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c <= gridSize; c++) list.push(makeEdgeId('v', r, c));
+      }
+      return list;
+    }
+    function getBoxEdges(row, col) {
+      return [
+        makeEdgeId('h', row, col),
+        makeEdgeId('h', row + 1, col),
+        makeEdgeId('v', row, col),
+        makeEdgeId('v', row, col + 1)
+      ];
+    }
+    function getAdjacentBoxesForEdge(gridSize, orientation, row, col) {
+      const adj = [];
+      if (orientation === 'h') {
+        if (row > 0) adj.push({ row: row - 1, col });
+        if (row < gridSize) adj.push({ row, col });
+      } else {
+        if (col > 0) adj.push({ row, col: col - 1 });
+        if (col < gridSize) adj.push({ row, col });
+      }
+      return adj;
+    }
+    function countBoxClaimedSides(edges, row, col) {
+      return getBoxEdges(row, col).filter((eid) => Boolean(edges[eid])).length;
+    }
+    function createInitialBoard(gridSize = 4) {
+      const boxes = [];
+      for (let r = 0; r < gridSize; r++) {
+        const rowCells = [];
+        for (let c = 0; c < gridSize; c++) {
+          rowCells.push({ row: r, col: c, owner: null, capturedOnTurn: null });
+        }
+        boxes.push(rowCells);
+      }
+      return {
+        gridSize,
+        edges: {},
+        boxes,
+        currentPlayer: 1,
+        scores: { 1: 0, 2: 0 },
+        turnCount: 0,
+        currentStreak: 0,
+        longestChain: { 1: 0, 2: 0 },
+        safeMovesCount: { 1: 0, 2: 0 },
+        totalMovesCount: { 1: 0, 2: 0 },
+        lastMove: null,
+        isGameOver: false,
+        winner: null
+      };
+    }
+    function isMoveSafe(state, edgeId) {
+      const { orientation, row, col } = parseEdgeId(edgeId);
+      const adjBoxes = getAdjacentBoxesForEdge(state.gridSize, orientation, row, col);
+      for (const b of adjBoxes) {
+        if (countBoxClaimedSides(state.edges, b.row, b.col) === 3) return true;
+      }
+      for (const b of adjBoxes) {
+        if (countBoxClaimedSides(state.edges, b.row, b.col) === 2) return false;
+      }
+      return true;
+    }
+    function applyMove(state, edgeId) {
+      if (state.isGameOver || state.edges[edgeId]) return state;
+      const { orientation, row, col } = parseEdgeId(edgeId);
+      const player = state.currentPlayer;
+      const wasSafe = isMoveSafe(state, edgeId);
+      const nextEdges = { ...state.edges, [edgeId]: player };
+      const nextBoxes = state.boxes.map((r) => r.map((cell) => ({ ...cell })));
+      const adjBoxes = getAdjacentBoxesForEdge(state.gridSize, orientation, row, col);
+      const captured = [];
+      const nextTurnNumber = state.turnCount + 1;
+
+      for (const b of adjBoxes) {
+        if (!nextBoxes[b.row][b.col].owner && countBoxClaimedSides(nextEdges, b.row, b.col) === 4) {
+          nextBoxes[b.row][b.col].owner = player;
+          nextBoxes[b.row][b.col].capturedOnTurn = nextTurnNumber;
+          captured.push({ row: b.row, col: b.col });
+        }
+      }
+      const nextScores = { ...state.scores, [player]: state.scores[player] + captured.length };
+      const totalBoxes = state.gridSize * state.gridSize;
+      const isGameOver = nextScores[1] + nextScores[2] === totalBoxes;
+      let winner = null;
+      if (isGameOver) {
+        winner = nextScores[1] > nextScores[2] ? 1 : nextScores[2] > nextScores[1] ? 2 : 'draw';
+      }
+      const nextStreak = captured.length > 0 ? state.currentStreak + captured.length : 0;
+      const nextLongestChain = {
+        ...state.longestChain,
+        [player]: Math.max(state.longestChain[player], nextStreak)
+      };
+      const nextPlayer = captured.length > 0 ? player : player === 1 ? 2 : 1;
+
+      return {
+        ...state,
+        edges: nextEdges,
+        boxes: nextBoxes,
+        currentPlayer: nextPlayer,
+        scores: nextScores,
+        turnCount: nextTurnNumber,
+        currentStreak: nextStreak,
+        longestChain: nextLongestChain,
+        safeMovesCount: {
+          ...state.safeMovesCount,
+          [player]: state.safeMovesCount[player] + (wasSafe ? 1 : 0)
+        },
+        totalMovesCount: {
+          ...state.totalMovesCount,
+          [player]: state.totalMovesCount[player] + 1
+        },
+        lastMove: { edgeId, boxesCaptured: captured },
+        isGameOver,
+        winner
+      };
+    }
+    function findImmediateScoringEdges(state) {
+      return getAllEdgeIds(state.gridSize).filter((eid) => {
+        if (state.edges[eid]) return false;
+        const { orientation, row, col } = parseEdgeId(eid);
+        const adj = getAdjacentBoxesForEdge(state.gridSize, orientation, row, col);
+        return adj.some((b) => countBoxClaimedSides(state.edges, b.row, b.col) === 3);
+      });
+    }
+    function evaluateChainGiveaway(state, edgeId) {
+      const sim = applyMove(state, edgeId);
+      if (sim.currentPlayer === state.currentPlayer) return 0;
+      let curr = sim;
+      let givenAway = 0;
+      const capPlayer = curr.currentPlayer;
+      while (!curr.isGameOver && curr.currentPlayer === capPlayer) {
+        const scoringEdge = findImmediateScoringEdges(curr)[0];
+        if (!scoringEdge) break;
+        const prev = curr.scores[capPlayer];
+        curr = applyMove(curr, scoringEdge);
+        givenAway += curr.scores[capPlayer] - prev;
+      }
+      return givenAway;
+    }
+    function chooseBestMove(state, difficulty = 'master') {
+      const available = getAllEdgeIds(state.gridSize).filter((eid) => !state.edges[eid]);
+      if (available.length === 0) return null;
+      const scoringEdges = findImmediateScoringEdges(state);
+
+      if (difficulty === 'easy') {
+        if (scoringEdges.length > 0 && Math.random() < 0.7) {
+          return { edgeId: scoringEdges[0], reason: 'Completes an open quadrant' };
+        }
+        return {
+          edgeId: available[Math.floor(Math.random() * available.length)],
+          reason: 'Exploratory drafting line'
+        };
+      }
+      if (scoringEdges.length > 0) {
+        return {
+          edgeId: scoringEdges[0],
+          reason: 'Completes 4th side to claim quadrant + bonus turn'
+        };
+      }
+      const safeEdges = available.filter((eid) => isMoveSafe(state, eid));
+      if (safeEdges.length > 0) {
+        if (difficulty === 'medium') {
+          return {
+            edgeId: safeEdges[Math.floor(Math.random() * safeEdges.length)],
+            reason: 'Safe boundary — avoids giving away a 3rd side'
+          };
+        }
+        let bestSafe = safeEdges[0];
+        let bestScore = -Infinity;
+        for (const eid of safeEdges) {
+          const { orientation, row, col } = parseEdgeId(eid);
+          const adj = getAdjacentBoxesForEdge(state.gridSize, orientation, row, col);
+          const totalAdjSides = adj.reduce(
+            (acc, b) => acc + countBoxClaimedSides(state.edges, b.row, b.col),
+            0
+          );
+          const score = -totalAdjSides * 10 + (adj.length === 2 ? 2 : 0);
+          if (score > bestScore) {
+            bestScore = score;
+            bestSafe = eid;
+          }
+        }
+        return {
+          edgeId: bestSafe,
+          reason: 'Safe structural line — preserves neutral tension'
+        };
+      }
+      let minGiveaway = Infinity;
+      let bestSacrifice = available[0];
+      for (const eid of available) {
+        const g = evaluateChainGiveaway(state, eid);
+        if (g < minGiveaway) {
+          minGiveaway = g;
+          bestSacrifice = eid;
+        }
+      }
+      return {
+        edgeId: bestSacrifice,
+        reason: `Minimal sacrifice — concedes only ${minGiveaway} ${minGiveaway === 1 ? 'quadrant' : 'quadrants'}`
+      };
+    }
+
+    // =========================================================================
+    // 3. INTERACTIVE VIEW RENDERER
+    // =========================================================================
+    const appState = {
+      shell: 'title',
+      gridSize: 4,
+      gameMode: 'ai',
+      difficulty: 'master',
+      board: createInitialBoard(4),
+      undoStack: [],
+      isAiThinking: false,
+      hintInfo: null,
+      showTensionNumbers: true,
+      hoveredEdge: null
+    };
+
+    function startNewMatch() {
+      appState.board = createInitialBoard(appState.gridSize);
+      appState.undoStack = [];
+      appState.isAiThinking = false;
+      appState.hintInfo = null;
+      appState.shell = 'playing';
+      document.body.dataset.state = 'playing';
+      render();
+    }
+
+    function selectEdge(edgeId) {
+      if (appState.shell !== 'playing' || appState.isAiThinking || appState.board.isGameOver || appState.board.edges[edgeId]) {
+        return;
+      }
+      appState.hintInfo = null;
+      appState.undoStack.push(appState.board);
+      const prevPlayer = appState.board.currentPlayer;
+      const nextBoard = applyMove(appState.board, edgeId);
+      const capturedCount = nextBoard.lastMove ? nextBoard.lastMove.boxesCaptured.length : 0;
+
+      if (capturedCount > 0) {
+        soundEngine.playBoxCapture(nextBoard.currentStreak);
+      } else {
+        soundEngine.playEdgeClaim(prevPlayer === 1);
+      }
+      appState.board = nextBoard;
+      render();
+      checkPostMove();
+    }
+
+    function checkPostMove() {
+      if (appState.board.isGameOver) {
+        soundEngine.playMatchEnd(appState.board.winner === 1 || appState.board.winner === 'draw');
+        setTimeout(() => {
+          appState.shell = 'gameover';
+          render();
+        }, 420);
+        return;
+      }
+      if (appState.gameMode === 'ai' && appState.board.currentPlayer === 2) {
+        appState.isAiThinking = true;
+        render();
+        setTimeout(() => {
+          if (appState.shell !== 'playing' || appState.board.isGameOver) return;
+          const decision = chooseBestMove(appState.board, appState.difficulty);
+          if (!decision) {
+            appState.isAiThinking = false;
+            render();
+            return;
+          }
+          const nextBoard = applyMove(appState.board, decision.edgeId);
+          const capturedCount = nextBoard.lastMove ? nextBoard.lastMove.boxesCaptured.length : 0;
+          if (capturedCount > 0) {
+            soundEngine.playBoxCapture(nextBoard.currentStreak);
+          } else {
+            soundEngine.playEdgeClaim(false);
+          }
+          appState.board = nextBoard;
+          appState.isAiThinking = false;
+          render();
+          checkPostMove();
+        }, 420);
+      }
+    }
+
+    function renderBoardSvg() {
+      const { gridSize, edges, boxes } = appState.board;
+      const padding = 56;
+      const boardSpan = 600 - padding * 2;
+      const cellSpan = boardSpan / gridSize;
+      const dotRadius = gridSize <= 4 ? 6.5 : 5.5;
+      const strokeThickness = gridSize <= 4 ? 6.5 : 5.5;
+      const getColor = (p) => (p === 1 ? '#1D4ED8' : '#C2410C');
+      const getSoftFill = (p) => (p === 1 ? 'rgba(29, 78, 216, 0.13)' : 'rgba(194, 65, 12, 0.13)');
+
+      let svgParts = [];
+
+      for (let c = 0; c < gridSize; c++) {
+        svgParts.push(
+          `<text x="${padding + c * cellSpan + cellSpan / 2}" y="${padding - 24}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#78716C">${String.fromCharCode(65 + c)}</text>`
+        );
+      }
+      for (let r = 0; r < gridSize; r++) {
+        svgParts.push(
+          `<text x="${padding - 26}" y="${padding + r * cellSpan + cellSpan / 2 + 4}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#78716C">${r + 1}</text>`
+        );
+      }
+
+      for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+          const cell = boxes[r][c];
+          const x = padding + c * cellSpan;
+          const y = padding + r * cellSpan;
+          const sides = countBoxClaimedSides(edges, r, c);
+          const isCaptured = cell.owner !== null;
+          const fill = isCaptured ? getSoftFill(cell.owner) : sides === 3 ? 'rgba(217, 119, 6, 0.10)' : 'transparent';
+
+          svgParts.push(`<rect x="${x + 5}" y="${y + 5}" width="${cellSpan - 10}" height="${cellSpan - 10}" rx="6" fill="${fill}" />`);
+          if (isCaptured) {
+            svgParts.push(
+              `<text x="${x + cellSpan / 2}" y="${y + cellSpan / 2 + 6}" text-anchor="middle" font-family="Fraunces, Georgia, serif" font-weight="700" font-size="${gridSize <= 4 ? 20 : 16}" fill="${getColor(cell.owner)}">${cell.owner === 1 ? 'I' : 'II'}</text>`
+            );
+          } else if (appState.showTensionNumbers) {
+            const tColor = sides === 3 ? '#B45309' : sides === 2 ? '#78716C' : '#D6D3CD';
+            svgParts.push(
+              `<text x="${x + cellSpan / 2}" y="${y + cellSpan / 2 + 4}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="${tColor}">${sides}/4</text>`
+            );
+          }
+        }
+      }
+
+      for (let r = 0; r <= gridSize; r++) {
+        for (let c = 0; c < gridSize; c++) {
+          const edgeId = makeEdgeId('h', r, c);
+          const owner = edges[edgeId];
+          const isHint = appState.hintInfo && appState.hintInfo.edgeId === edgeId;
+          const x1 = padding + c * cellSpan;
+          const y1 = padding + r * cellSpan;
+          const x2 = x1 + cellSpan;
+
+          if (owner) {
+            svgParts.push(`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y1}" stroke="${getColor(owner)}" stroke-width="${strokeThickness}" stroke-linecap="round" />`);
+          } else {
+            const stroke = isHint ? '#059669' : '#D6D3CD';
+            const width = isHint ? 4 : 2;
+            const dash = isHint ? '8 6' : '4 5';
+            svgParts.push(`
+              <g class="cursor-pointer" onclick="window.__selectEdge('${edgeId}')">
+                <line x1="${x1 + dotRadius + 2}" y1="${y1}" x2="${x2 - dotRadius - 2}" y2="${y1}" stroke="${stroke}" stroke-width="${width}" stroke-dasharray="${dash}" stroke-linecap="round" />
+                ${isHint ? `<circle cx="${(x1 + x2) / 2}" cy="${y1}" r="5" fill="#059669" stroke="#FAF8F5" stroke-width="1.5" />` : ''}
+                <line x1="${x1 + 6}" y1="${y1}" x2="${x2 - 6}" y2="${y1}" stroke="transparent" stroke-width="26" />
+              </g>
+            `);
+          }
+        }
+      }
+
+      for (let r = 0; r < gridSize; r++) {
+        for (let c = 0; c <= gridSize; c++) {
+          const edgeId = makeEdgeId('v', r, c);
+          const owner = edges[edgeId];
+          const isHint = appState.hintInfo && appState.hintInfo.edgeId === edgeId;
+          const x1 = padding + c * cellSpan;
+          const y1 = padding + r * cellSpan;
+          const y2 = y1 + cellSpan;
+
+          if (owner) {
+            svgParts.push(`<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y2}" stroke="${getColor(owner)}" stroke-width="${strokeThickness}" stroke-linecap="round" />`);
+          } else {
+            const stroke = isHint ? '#059669' : '#D6D3CD';
+            const width = isHint ? 4 : 2;
+            const dash = isHint ? '8 6' : '4 5';
+            svgParts.push(`
+              <g class="cursor-pointer" onclick="window.__selectEdge('${edgeId}')">
+                <line x1="${x1}" y1="${y1 + dotRadius + 2}" x2="${x1}" y2="${y2 - dotRadius - 2}" stroke="${stroke}" stroke-width="${width}" stroke-dasharray="${dash}" stroke-linecap="round" />
+                ${isHint ? `<circle cx="${x1}" cy="${(y1 + y2) / 2}" r="5" fill="#059669" stroke="#FAF8F5" stroke-width="1.5" />` : ''}
+                <line x1="${x1}" y1="${y1 + 6}" x2="${x1}" y2="${y2 - 6}" stroke="transparent" stroke-width="26" />
+              </g>
+            `);
+          }
+        }
+      }
+
+      for (let r = 0; r <= gridSize; r++) {
+        for (let c = 0; c <= gridSize; c++) {
+          const cx = padding + c * cellSpan;
+          const cy = padding + r * cellSpan;
+          svgParts.push(`
+            <g class="pointer-events-none">
+              <circle cx="${cx}" cy="${cy}" r="${dotRadius + 2}" fill="#FAF8F5" />
+              <circle cx="${cx}" cy="${cy}" r="${dotRadius}" fill="#18181B" />
+              <circle cx="${cx}" cy="${cy}" r="2" fill="#FAF8F5" />
+            </g>
+          `);
+        }
+      }
+
+      return `<svg viewBox="0 0 600 600" class="w-full h-full overflow-visible select-none">${svgParts.join('')}</svg>`;
+    }
+
+    window.__selectEdge = selectEdge;
+    window.__setMode = (m) => { soundEngine.playUiTick(); appState.gameMode = m; render(); };
+    window.__setGrid = (g) => { soundEngine.playUiTick(); appState.gridSize = g; render(); };
+    window.__setDiff = (d) => { soundEngine.playUiTick(); appState.difficulty = d; render(); };
+    window.__start = () => { soundEngine.playUiTick(); startNewMatch(); };
+    window.__toTitle = () => { soundEngine.playUiTick(); appState.shell = 'title'; render(); };
+    window.__undo = () => {
+      if (appState.undoStack.length === 0 || appState.isAiThinking) return;
+      soundEngine.playUiTick();
+      appState.board = appState.undoStack.pop();
+      appState.hintInfo = null;
+      render();
+    };
+    window.__hint = () => {
+      if (appState.isAiThinking || appState.board.isGameOver) return;
+      soundEngine.playUiTick();
+      appState.hintInfo = chooseBestMove(appState.board, 'master');
+      render();
+    };
+    window.__toggleSides = () => {
+      soundEngine.playUiTick();
+      appState.showTensionNumbers = !appState.showTensionNumbers;
+      render();
+    };
+
+    function render() {
+      const root = document.getElementById('app');
+      if (appState.shell === 'title') {
+        root.innerHTML = `
+          <main class="min-h-screen w-full flex flex-col justify-between px-6 py-8 md:px-14 md:py-10">
+            <div class="max-w-5xl w-full mx-auto flex items-center justify-between border-b border-stone-300 pb-4 text-xs text-stone-600 font-mono-tabular">
+              <span>QUADRANT STUDIO EDITION · STANDALONE FILE</span>
+              <span>ARCHITECTURAL DOTS &amp; BOXES</span>
+            </div>
+            <div class="max-w-xl w-full mx-auto my-auto py-8 space-y-6">
+              <div class="space-y-2">
+                <h1 class="text-4xl font-display font-bold text-stone-900">Quadrant</h1>
+                <p class="text-stone-700 text-sm leading-relaxed">
+                  Connect adjacent grid vertices to enclose territory. Completing the fourth boundary of any quadrant claims it in your ink and grants an immediate bonus turn.
+                </p>
+              </div>
+              <div class="bg-[#FAF8F5] border border-stone-300 rounded-xl p-6 shadow-sm space-y-5">
+                <div class="space-y-2">
+                  <div class="text-xs font-semibold text-stone-900">Match Format</div>
+                  <div class="grid grid-cols-2 gap-2 p-1 bg-stone-200/75 rounded-lg">
+                    <button onclick="window.__setMode('ai')" class="py-2 px-3 text-xs font-semibold rounded-md cursor-pointer ${appState.gameMode === 'ai' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600'}">vs AI Architect</button>
+                    <button onclick="window.__setMode('local')" class="py-2 px-3 text-xs font-semibold rounded-md cursor-pointer ${appState.gameMode === 'local' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600'}">Pass &amp; Play (2P)</button>
+                  </div>
+                </div>
+                <div class="space-y-2">
+                  <div class="text-xs font-semibold text-stone-900">Grid Specification</div>
+                  <div class="grid grid-cols-4 gap-2 p-1 bg-stone-200/75 rounded-lg">
+                    ${[3, 4, 5, 6].map((s) => `<button onclick="window.__setGrid(${s})" class="py-2 px-3 text-xs font-semibold rounded-md font-mono-tabular cursor-pointer ${appState.gridSize === s ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600'}">${s}×${s}</button>`).join('')}
+                  </div>
+                </div>
+                ${appState.gameMode === 'ai' ? `
+                <div class="space-y-2">
+                  <div class="text-xs font-semibold text-stone-900">AI Architect Discipline</div>
+                  <div class="grid grid-cols-3 gap-2 p-1 bg-stone-200/75 rounded-lg">
+                    ${['easy', 'medium', 'master'].map((d) => `<button onclick="window.__setDiff('${d}')" class="py-2 px-3 text-xs font-semibold rounded-md capitalize cursor-pointer ${appState.difficulty === d ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-600'}">${d === 'easy' ? 'Apprentice' : d === 'medium' ? 'Drafter' : 'Master'}</button>`).join('')}
+                  </div>
+                </div>` : ''}
+                <button onclick="window.__start()" class="w-full py-3.5 px-6 bg-stone-900 hover:bg-stone-800 text-[#FAF8F5] font-semibold text-sm rounded-lg cursor-pointer">
+                  Start Match
+                </button>
+              </div>
+            </div>
+            <div class="max-w-5xl w-full mx-auto pt-4 border-t border-stone-300 text-xs text-stone-600 font-mono-tabular flex justify-between">
+              <span>Click any dashed boundary line to draw</span>
+              <span>COBALT #1D4ED8 · VERMILION #C2410C</span>
+            </div>
+          </main>
+        `;
+        return;
+      }
+
+      const b = appState.board;
+      const totalBoxes = b.gridSize * b.gridSize;
+      root.innerHTML = `
+        <main class="h-screen w-screen overflow-hidden flex flex-col justify-between">
+          <div class="w-full bg-[#FAF8F5] border-b border-stone-300 px-4 py-2.5 flex items-center justify-between">
+            <button onclick="window.__toTitle()" class="text-left cursor-pointer">
+              <div class="text-base font-display font-bold text-stone-900">Quadrant</div>
+              <div class="text-[10px] font-mono-tabular text-stone-500">${b.gridSize}×${b.gridSize} GRID</div>
+            </button>
+            <div class="flex items-center gap-4">
+              <div class="flex items-center gap-2 px-3 py-1 rounded-lg border ${b.currentPlayer === 1 ? 'border-[#1D4ED8] bg-[#1D4ED8]/10' : 'border-transparent'}">
+                <span class="text-xs font-mono-tabular text-stone-600">P1</span>
+                <span class="text-2xl font-mono-tabular font-bold text-[#1D4ED8]">${b.scores[1]}</span>
+              </div>
+              <span class="text-xs font-mono-tabular text-stone-500">OF ${totalBoxes}</span>
+              <div class="flex items-center gap-2 px-3 py-1 rounded-lg border ${b.currentPlayer === 2 ? 'border-[#C2410C] bg-[#C2410C]/10' : 'border-transparent'}">
+                <span class="text-2xl font-mono-tabular font-bold text-[#C2410C]">${b.scores[2]}</span>
+                <span class="text-xs font-mono-tabular text-stone-600">${appState.gameMode === 'ai' ? 'AI' : 'P2'}</span>
+              </div>
+            </div>
+            <button onclick="window.__start()" class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-stone-300 bg-white hover:bg-stone-100 cursor-pointer">Restart</button>
+          </div>
+
+          <div class="flex-1 min-h-0 flex items-center justify-center p-4 relative">
+            <div class="w-full max-w-[520px] aspect-square bg-[#FAF8F5] border border-stone-300 rounded-2xl shadow-sm p-4 flex items-center justify-center">
+              ${renderBoardSvg()}
+            </div>
+            ${appState.hintInfo ? `
+              <div class="absolute bottom-3 left-1/2 -translate-x-1/2 bg-stone-900 text-[#FAF8F5] px-4 py-2 rounded-lg text-xs font-mono-tabular shadow-md">
+                <span class="text-emerald-400 font-semibold">HINT [${appState.hintInfo.edgeId}]:</span> ${appState.hintInfo.reason}
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="w-full bg-[#FAF8F5] border-t border-stone-300 px-4 py-2.5 flex items-center justify-between text-xs">
+            <span class="font-mono-tabular text-stone-600">LINES CLAIMED: <strong>${Object.keys(b.edges).length}/${2 * b.gridSize * (b.gridSize + 1)}</strong></span>
+            <div class="flex items-center gap-2">
+              <button onclick="window.__undo()" class="px-3 py-1.5 font-semibold rounded-lg border border-stone-300 bg-white hover:bg-stone-100 cursor-pointer">Undo</button>
+              <button onclick="window.__hint()" class="px-3 py-1.5 font-semibold rounded-lg border border-stone-300 bg-white hover:bg-stone-100 cursor-pointer">Tactical Hint</button>
+              <button onclick="window.__toggleSides()" class="px-3 py-1.5 font-semibold rounded-lg border border-stone-800 bg-stone-900 text-white cursor-pointer">${appState.showTensionNumbers ? 'Side Counts: On' : 'Side Counts: Off'}</button>
+            </div>
+          </div>
+
+          ${appState.shell === 'gameover' ? `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45">
+              <div class="w-full max-w-md bg-[#FAF8F5] border border-stone-300 rounded-2xl p-6 shadow-xl space-y-5">
+                <h2 class="text-2xl font-display font-bold text-stone-900">
+                  ${b.winner === 1 ? 'Player I Wins the Grid' : b.winner === 2 ? (appState.gameMode === 'ai' ? 'AI Architect Claims Majority' : 'Player II Wins the Grid') : 'Architectural Deadlock (Draw)'}
+                </h2>
+                <div class="text-lg font-mono-tabular font-bold">
+                  Final Score: <span class="text-[#1D4ED8]">${b.scores[1]}</span> – <span class="text-[#C2410C]">${b.scores[2]}</span>
+                </div>
+                <div class="flex gap-2">
+                  <button onclick="window.__start()" class="flex-1 py-3 bg-stone-900 text-white text-sm font-semibold rounded-lg cursor-pointer">Play Again</button>
+                  <button onclick="window.__toTitle()" class="py-3 px-4 bg-white border border-stone-300 text-stone-800 text-xs font-semibold rounded-lg cursor-pointer">Title Screen</button>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+        </main>
+      `;
+    }
+
+    render();
+  </script>
+</body>
+</html>
